@@ -232,18 +232,24 @@ function transaksi(){
     $kembalian = $obj->kembalian;
     $kurang_bayar = $obj->kurang_bayar;
     $status_bayar = $obj->status_bayar;
-    $tlp = $obj->tlp;
+    $tlpPembeli = $obj->tlpPembeli;
+    $tlpPemesan = $obj->tlpPemesan;
     //for Pengambilan
     $tanggal_ambil = $obj->tanggal_ambil;
     $jam = $obj->jam;
 
-    $query = "SELECT id_user, akses FROM user WHERE no_telepon = '$tlp'";
+    $query = "SELECT id_user FROM user WHERE no_telepon = '$tlpPembeli'";
     $query_result = mysqli_query($conn, $query);
-    if ($query_result) {
+    $query5 = "SELECT akses FROM user WHERE no_telepon = '$tlpPemesan'";
+    $query_result5 = mysqli_query($conn, $query5);
+    if ($query_result && $query_result5) {
         while ($row = mysqli_fetch_assoc($query_result)) {
             $id_cust = $row['id_user'];
-            $akses = $row['akses'];     //ini buat bedain no nota kalo jadi
         }
+        while ($row1 = mysqli_fetch_assoc($query_result5)) {
+            $akses = $row1['akses'];     //ini buat bedain no nota kalo jadi
+        }
+    
     if($akses == 'karyawan'){
         $query2 = "SELECT no_nota FROM transaksi WHERE SUBSTRING(no_nota, 1, 2) = 'KY' ORDER BY SUBSTRING(no_nota, 3) DESC LIMIT 1";
         $result = mysqli_query($conn, $query2);
@@ -282,16 +288,25 @@ function transaksi(){
             $no_nota = $prefix . sprintf('%04d', $number);
         }
 
-        $id_img = $no_nota.".jpg";
-        $imgBukti_file = "image/" . $no_nota . ".jpg";
-        if(file_put_contents($imgBukti_file, base64_decode($imgBukti))){
-            $responUpload = "berhasil upload";
+        if($imgBukti != ""){
+            $id_img = $no_nota.".jpg";
+            $imgBukti_file = "image/" . $no_nota . ".jpg";
+            if(file_put_contents($imgBukti_file, base64_decode($imgBukti))){
+                $responUpload = "berhasil upload";
+            }else{
+                $responUpload = "gagal upload";
+            }
         }else{
-            $responUpload = "gagal upload";
+            $id_img = null;
         }
 
+        if($id_img != null){
         $query3 = "INSERT INTO transaksi (no_nota, tgl_transaksi, grand_total, dibayarkan, kembalian, kurang_bayar, status_bayar, bukti_bayar, id_customer) VALUES 
                     ('$no_nota',NOW() ,'$grandTotal', '$dibayarkan', '$kembalian', '$kurang_bayar','$status_bayar' ,'$id_img' ,'$id_cust')";
+        }else{
+            $query3 = "INSERT INTO transaksi (no_nota, tgl_transaksi, grand_total, dibayarkan, kembalian, kurang_bayar, status_bayar, bukti_bayar, id_customer) VALUES 
+                    ('$no_nota',NOW() ,'$grandTotal', '$dibayarkan', '$kembalian', '$kurang_bayar','$status_bayar' ,null ,'$id_cust')";
+        }
         $query_result1 = mysqli_query($conn, $query3);
 
         $query4 = "INSERT INTO status_transaksi (no_nota, tanggal_pengambilan, jam, status) VALUES 
@@ -451,7 +466,7 @@ function riwayatPesanRiwayat(){
             }
             $query1 = "SELECT transaksi.no_nota, status_transaksi.tanggal_pengambilan, transaksi.grand_total, status_transaksi.status ".
             "FROM transaksi JOIN status_transaksi ON transaksi.no_nota = status_transaksi.no_nota ".
-            "WHERE transaksi.id_customer = '$id' AND status_transaksi.status = 'pesanan selesai' OR status_transaksi.status = 'pesanan dibatalkan'";
+            "WHERE transaksi.id_customer = '$id' AND (status_transaksi.status = 'pesanan selesai' OR status_transaksi.status = 'pesanan dibatalkan') LIMIT 10";
             $query_result1 = mysqli_query($conn, $query1);
             if (mysqli_num_rows($query_result1) > 0) {
                 while ($row1 = mysqli_fetch_assoc($query_result1)) {
@@ -524,6 +539,160 @@ function addCustomer(){
             'code' => 100,
             'status' => 'Lengkapi Data Yang Dibutuhkan'
         );
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode($response);
+}
+
+function riwayatPesanTerjadwalAdmin(){
+    include 'koneksi.php';
+    $conn = mysqli_connect($HostName, $HostUser, $HostPass, $DatabaseName);
+    
+    $query1 = "SELECT transaksi.no_nota, user.nama, transaksi.grand_total FROM transaksi ".
+        "JOIN status_transaksi ON transaksi.no_nota = status_transaksi.no_nota JOIN user ".
+        "ON transaksi.id_customer = user.id_user WHERE status_transaksi.tanggal_pengambilan > CURDATE() ".
+        "AND (status_transaksi.status = 'pesanan masuk' OR status_transaksi.status = 'pesanan diproses')";
+    $query_result1 = mysqli_query($conn, $query1);
+    if (mysqli_num_rows($query_result1) > 0) {
+        while ($row1 = mysqli_fetch_assoc($query_result1)) {
+            $json_array[] = $row1;
+        }
+        $response = array(
+            'code' => 200,
+            'status' => 'Data ditemukan',
+            'transaksi_list' => $json_array
+        );
+    } else {
+        $response = array(
+        'code' => 400,
+        'status' => 'Data tidak ditemukan',
+        'transaksi_list' => $json_array
+        );    
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode($response);
+}
+
+function riwayatPesanProsesAdmin(){
+    include 'koneksi.php';
+    $conn = mysqli_connect($HostName, $HostUser, $HostPass, $DatabaseName);
+
+    $query1 = "SELECT transaksi.no_nota, user.nama, transaksi.grand_total FROM transaksi ".
+        "JOIN status_transaksi ON transaksi.no_nota = status_transaksi.no_nota JOIN user ".
+        "ON transaksi.id_customer = user.id_user WHERE status_transaksi.tanggal_pengambilan = CURDATE() ".
+        "AND (status_transaksi.status = 'pesanan masuk' OR status_transaksi.status = 'pesanan diproses')";
+    $query_result1 = mysqli_query($conn, $query1);
+    if (mysqli_num_rows($query_result1) > 0) {
+        while ($row1 = mysqli_fetch_assoc($query_result1)) {
+            $json_array[] = $row1;
+        }
+        $response = array(
+            'code' => 200,
+            'status' => 'Data ditemukan',
+            'transaksi_list' => $json_array
+        );
+    } else {
+        $response = array(
+        'code' => 400,
+        'status' => 'Data tidak ditemukan',
+        'transaksi_list' => $json_array
+        );    
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode($response);
+}
+
+function riwayatPesanRiwayatAdmin(){
+    include 'koneksi.php';
+    $conn = mysqli_connect($HostName, $HostUser, $HostPass, $DatabaseName);
+
+    $query1 = "SELECT transaksi.no_nota, user.nama, transaksi.grand_total FROM transaksi ".
+        "JOIN status_transaksi ON transaksi.no_nota = status_transaksi.no_nota JOIN user ".
+        "ON transaksi.id_customer = user.id_user WHERE (status_transaksi.status = 'pesanan selesai' ".
+        "OR status_transaksi.status = 'pesanan dibatalkan') AND status_transaksi.tanggal_pengambilan >= DATE_SUB(NOW(), INTERVAL 2 DAY);";
+    $query_result1 = mysqli_query($conn, $query1);
+    if (mysqli_num_rows($query_result1) > 0) {
+        while ($row1 = mysqli_fetch_assoc($query_result1)) {
+            $json_array[] = $row1;
+        }
+        $response = array(
+            'code' => 200,
+            'status' => 'Data ditemukan',
+            'transaksi_list' => $json_array
+        );
+    } else {
+        $response = array(
+        'code' => 400,
+        'status' => 'Data tidak ditemukan',
+        'transaksi_list' => $json_array
+        );    
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode($response);
+}
+
+function getNotaTransaksi(){
+    include 'koneksi.php';
+    $conn = mysqli_connect($HostName, $HostUser, $HostPass, $DatabaseName);
+
+    $nota = $_GET['no_nota'];
+
+    $query1 = "SELECT transaksi.no_nota, user.nama, status_transaksi.tanggal_pengambilan, status_transaksi.jam, ".
+                "transaksi.grand_total, transaksi.status_bayar, transaksi.kurang_bayar, CASE WHEN TIMESTAMPDIFF".
+                "(DAY, CURDATE(), status_transaksi.tanggal_pengambilan) >= 2 THEN true ELSE false END AS status_batal ".
+                "FROM transaksi JOIN user ON transaksi.id_customer = user.id_user JOIN status_transaksi ON ".
+                "transaksi.no_nota = status_transaksi.no_nota WHERE transaksi.no_nota = '$nota';";
+    $query_result1 = mysqli_query($conn, $query1);
+    if (mysqli_num_rows($query_result1) > 0) {
+        while ($row1 = mysqli_fetch_assoc($query_result1)) {
+            $json_array[] = $row1;
+        }
+        $response = array(
+            'code' => 200,
+            'status' => 'Data ditemukan',
+            'nota_list' => $json_array
+        );
+    } else {
+        $response = array(
+        'code' => 400,
+        'status' => 'Data tidak ditemukan',
+        'nota_list' => $json_array
+        );    
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode($response);
+}
+
+function getNotaBarang(){
+    include 'koneksi.php';
+    $conn = mysqli_connect($HostName, $HostUser, $HostPass, $DatabaseName);
+
+    $nota = $_GET['no_nota'];
+
+    $query1 = "SELECT barang.nama_barang, detail_transaksi.qty, barang.harga_jual, detail_transaksi.total, barang.id_barang, barang.image_barang, barang.deskripsi ".
+                "FROM detail_transaksi JOIN barang ON barang.id_barang = detail_transaksi.id_barang JOIN transaksi ".
+                "ON transaksi.no_nota = detail_transaksi.no_nota WHERE transaksi.no_nota = '$nota'";
+    $query_result1 = mysqli_query($conn, $query1);
+    if (mysqli_num_rows($query_result1) > 0) {
+        while ($row1 = mysqli_fetch_assoc($query_result1)) {
+            $json_array[] = $row1;
+        }
+        $response = array(
+            'code' => 200,
+            'status' => 'Data ditemukan',
+            'nota_list' => $json_array
+        );
+    } else {
+        $response = array(
+        'code' => 400,
+        'status' => 'Data tidak ditemukan',
+        'nota_list' => $json_array
+        );    
     }
 
     header('Content-Type: application/json');
