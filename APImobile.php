@@ -117,14 +117,26 @@ function updateProfile(){
     $alamat = $obj->alamat;
     $tlp_old = $obj->telepon_old;
     $tlp_new = $obj->telepon_new;
-    $id_photo = $tlp_new.".jpg";
 
-    $photo_filename = "image/" . $tlp_new . ".jpg";
-    if(file_put_contents($photo_filename, base64_decode($photo))){
-        $responUpload = "berhasil upload";
-    }else{
-        $responUpload = "gagal upload";
-    }
+    $id_photo = $tlp_new.".jpg";
+    
+        $photo_filename = "image/" . $tlp_new . ".jpg";
+
+        if (file_exists($photo_filename)) {
+            // Jika ada, hapus file yang sudah ada
+            if (unlink($photo_filename)) {
+                echo "File lama dihapus.";
+            }else {
+                echo "Gagal menghapus file lama.";
+            }
+        }
+
+        if(file_put_contents($photo_filename, base64_decode($photo))){
+            $responUpload = "berhasil upload";
+        }else{
+            $responUpload = "gagal upload";
+        }
+    
 
     // $query_update= "update user set photo_profile = '$photo_decode', nama = '$nama', alamat = '$alamat',
     //                  no_telepon = '$tlp_new' where no_telepon = '$tlp_old'";
@@ -145,14 +157,12 @@ function updateProfile(){
         if ($query) {
             $response = array(
                 'code' => 200,
-                'status' => 'Data sudah diperbarui!',
-                'upload' => $responUpload
+                'status' => 'Data sudah diperbarui!'
             );
         } else {
             $response = array(
                 'code' => 400,
-                'status' => 'Gagal diperbarui!',
-                'upload' => $responUpload
+                'status' => 'Gagal diperbarui!'
             );
         }
 
@@ -284,7 +294,7 @@ function filterBestSeller(){
     include 'koneksi.php';
     $conn = mysqli_connect($HostName, $HostUser, $HostPass, $DatabaseName);
 
-        $query = "SELECT barang.id_barang ,barang.nama_barang, barang.image_barang, barang.harga_jual, ".
+        $query = "SELECT barang.id_barang ,barang.nama_barang, barang.gambar_barang, barang.harga_jual, ".
                 "barang.deskripsi, SUM(detail_transaksi.qty) AS total_qty FROM detail_transaksi ".
                 "JOIN barang ON barang.id_barang = detail_transaksi.id_barang WHERE barang.keterangan = 'normal' ".
                 "GROUP BY barang.id_barang ORDER BY `total_qty` DESC LIMIT 15";
@@ -921,7 +931,7 @@ function getNotaBarang(){
 
     $nota = $_GET['no_nota'];
 
-    $query1 = "SELECT barang.nama_barang, detail_transaksi.qty, barang.harga_jual, detail_transaksi.total, barang.id_barang, barang.image_barang, barang.deskripsi ".
+    $query1 = "SELECT barang.nama_barang, detail_transaksi.qty, barang.harga_jual, detail_transaksi.total, barang.id_barang, barang.gambar_barang, barang.deskripsi ".
                 "FROM detail_transaksi JOIN barang ON barang.id_barang = detail_transaksi.id_barang JOIN transaksi ".
                 "ON transaksi.no_nota = detail_transaksi.no_nota WHERE transaksi.no_nota = '$nota'";
     $query_result1 = mysqli_query($conn, $query1);
@@ -968,8 +978,7 @@ function getNotaPaket(){
     } else {
         $response = array(
         'code' => 400,
-        'status' => 'Data tidak ditemukan',
-        'nota_list' => null
+        'status' => 'Data tidak ditemukan'
         );    
     }
 
@@ -1112,7 +1121,7 @@ function getIdentitasPaket(){
             $response = array(
                 'code' => 404,
                 'status' => 'Data tidak ditemukan',
-                'identitas' => null
+                'identitas' => 'PKT0001'
             );
         }
     }
